@@ -1,5 +1,9 @@
 # 面向 Java 程序员的 Scala 教程
 
+2025-02-04⭐
+@author Jiawei Mao
+***
+
 ## 简介
 
 Scala 的优点：
@@ -75,7 +79,9 @@ scala 的 `import` 语句与 Java 的非常相似，但功能更强大。可以�
 
 ## 一切都是对象
 
-Scala 是一个纯粹的面向对象语言，一切都是对象，包括数字和函数。这方面它与 Java 不同，Java 将原始类型与引用类型进行了区分。
+Scala 是一个纯粹的面向对象语言，一切都是对象，包括数字和函数。这方面它与 Java 不同，Java 将原始类型与引用类型进行了区分。如下所示：
+
+![image-20250204092012176](./images/image-20250204092012176.png)
 
 ### 数字是对象
 
@@ -294,7 +300,142 @@ def eval(t: Tree, ev: Environment): Int = t match {
 
 ### 添加新操作
 
+为了进一步探索模式匹配，下面定义算术表达式的另一个运算：符号求导。运算规则如下：
 
+1. 加和的导数是导数加和
+2. 如果变量 `v` 对自身求导，则该变量的导数为 1，否则为 0
+3. 常量的导数为 0
+
+将该规则翻译为 Scala 代码：
+
+```scala
+import Tree._
+
+def derive(t: Tree, v: String): Tree = t match {
+  case Sum(left, right)        => Sum(derive(left, v), derive(right, v))
+  case Var(n) if v == n => Const(1)
+  case _                => Const(0)
+}
+```
+
+该函数引入了两个与模式匹配相关的新概念：
+
+- 一个是 `Var` 的 `case` 表达式后面有一个 `if` 关键字，只有表达式为 true 才会进行模式匹配；确保被求导的变量名称与求导变量 `v` 相同时，才返回 1
+- 另外是通配符 `_`，它匹配任何值，无需赋予名称
+
+模式匹配还有许多功能，这里不再赘述。
+
+下面编写一个简单的主函数，它对表达式 `(x+x)+(7+y)` 执行几个操作：首先在环境
+
+## Trait
+
+除了从超类继承代码，Scala 类还可以从一个或多个 traits 导入代码。
+
+对 Java 程序员来说，可以将其视为包含代码的接口。在 Scala 中，当一个类继承 trait 时，需要实现该 trait 的接口，并继承 trait 中包含的所有代码。
+
+> [!NOTE]
+>
+> 从 Java 8 开始，Java 接口也可以包含代码，使用 `default` 关键字或 static 方法。
+
+下面通过有序对象来解释 trait 的功能。在 Java 中，可以比较的对象实现 `Comparable` 接口。在 Scala 中，则可以做得更好，Scala 将与 `Comparable` 等价的 `Ord` 定义为 trait。
+
+比较对象时，有 6 种不同的 predicates 很有用：＜、≤、=、≠、≥、＞。但是，定义这些 predicates 很麻烦，尤其其中 4 个可以用剩下的两个来表达。即给定 = 和 < 定义，就可以表达其它 predicates。在 Scala 中，所有这些都可以通过以下 traits 进行捕获：
+
+```scala
+trait Ord {
+  def < (that: Any): Boolean
+  def <=(that: Any): Boolean =  (this < that) || (this == that)
+  def > (that: Any): Boolean = !(this <= that)
+  def >=(that: Any): Boolean = !(this < that)
+}
+```
+
+该定义既创建了 `Ord` 类型，其作用与 Java 的 `Comparable` 接口相同，又根据 < 和 = 定义了其它三个 predicates 的默认实现。这里没有 = 和 ≠，因为它们默认存在于所有对象中。
+
+上面使用的 `Any` 类型是 Scala 中所有其它类型的超类型，它可以看作 Java 的 `Object` 的更通用版本，因为它也是 `Int`, `Float` 的超类型。
+
+因此，为了使类的对象可比较，只需定义测试 = 和 < 的 predicates，并 mix-in 到 `Ord` 类。例如，下面定义一个 `Date` 类表示日期，此类日期由年、月、日组成，将它们全部表示为整数：
+
+```scala
+class Date(y: Int, m: Int, d: Int) extends Ord {
+  def year = y
+  def month = m
+  def day = d
+  override def toString(): String = s"$year-$month-$day"
+
+  // rest of implementation will go here
+}
+```
+
+这里 `extends Ord` 最关键，它声明 `Date` 类继承自 `Ord` trait。
+
+然后重新定义从 `Object` 继承的 `equals` 方法，以便通过比较各个字段来比较日期。`equals` 的默认实现不可用，因为它与 Java 一样，通过对象的识别号来比较对象。定义:
+
+```scala
+class Date(y: Int, m: Int, d: Int) extends Ord {
+  // previous decls here
+
+  override def equals(that: Any): Boolean = that match {
+    case d: Date => d.day == day && d.month == month && d.year == year
+    case _ => false
+  }
+
+  // rest of implementation will go here
+}
+```
+
+在 Java 16 之前，需要使用 `instanceof` 运算符，然后进行强制类型转换，相当于 Scala 中 `that.isInstanceOf[Date]` 和 `that.asInstanceOf[Date]`；不过在 Scala 中类型模式更常用，如上代码所示，它检查是否是 `Date` 实例，并将其绑定到变量 `d`，然后在 `case` 右侧使用。
+
+最后，还需要定义 < 方法。如下所示，它利用另一个方法，即来自 `scala.sys` 的 `error`，该方法抛出给定错误信息的异常：
+
+```scala
+class Date(y: Int, m: Int, d: Int) extends Ord {
+  // previous decls here
+
+  def <(that: Any): Boolean = that match {
+    case d: Date =>
+      (year < d.year) ||
+      (year == d.year && (month < d.month ||
+                         (month == d.month && day < d.day)))
+
+    case _ => sys.error("cannot compare " + that + " and a Date")
+  }
+}
+```
+
+这样就完成了对 `Date` 的定义。此类的实例既可以看作日期，也可以看作可比较对象。此外，它们都定义了前面提到的 6 个比较 predicates，其中 `equals` 和 `<` 在 `Date` 类中直接定义，其它则从 `Ord` trait 继承。
+
+## 泛型
+
+泛型指按类型参数化代码的能力。Java 通过 `Object` 实现，它是所有对象的超类型。然而，该解决方案不够理想，因为它不适用于基本类型（`int`, `long`, `float`），同时意味着代码中必须插入大量动态类型转换。
+
+Scala 可以定义泛型类来解决该问题。下面用一个最简单的容器类的示例来说明：一个引用，它可以是空的，也可以指向某种类型的对象：
+
+```scala
+class Reference[T] {
+  private var contents: T = _
+  def set(value: T): Unit = { contents = value }
+  def get: T = contents
+}
+```
+
+`Reference` 类由类型 `T` 参数化，表示元素类型。该类型在类中用作 `contents` 变量的类型、`set` 方法的参数和 `get` 方法的返回类型。
+
+上面赋予变量 `contents` 的初始值为 `_`，它代表默认值。对数字类型默认为 0，对布尔类型默认为 false，对 Unit 类型默认为 `()`，对所有对象类型默认为 `null`。
+
+要使用此 `Reference` 类，需要指定类型参数 `T` 的类型。例如，创建包含整数类型的 `Reference`：
+
+```scala
+object IntegerReference {
+  def main(args: Array[String]): Unit = {
+    val cell = new Reference[Int]
+    cell.set(13)
+    println("Reference contains the half of " + (cell.get * 2))
+  }
+}
+```
+
+可以看出，在将 `get` 方法返回的值用作整数之前，不需要进行强制转换。
 
 ## 参考
 
